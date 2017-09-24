@@ -1,7 +1,7 @@
 #
 #
 # GroveWeatherPi Solar Powered Weather Station
-# Version 2.8 March 9, 2017
+# Version 2.96 August 24, 2017
 #
 # SwitchDoc Labs
 # www.switchdoc.com
@@ -17,6 +17,8 @@ import random
 import re
 import math
 import os
+
+import commands
 
 import sendemail
 import pclogging
@@ -861,12 +863,12 @@ def sampleWeather():
 	# turn I2CBus 0 on
  	if (config.TCA9545_I2CMux_Present):
          	tca9545.write_control_register(TCA9545_CONFIG_BUS0)
-
+	SDL_INTERRUPT_CLICKS = 1
 
 	if (config.WXLink_Present == False):
  		currentWindSpeed = weatherStation.current_wind_speed()
   		currentWindGust = weatherStation.get_wind_gust()
-  		totalRain = totalRain + weatherStation.get_current_rain_total()
+  		totalRain = totalRain + weatherStation.get_current_rain_total()/SDL_INTERRUPT_CLICKS
 		if ((config.ADS1015_Present == True) or (config.ADS1115_Present == True)):
 			currentWindDirection = weatherStation.current_wind_direction()
 			currentWindDirectionVoltage = weatherStation.current_wind_direction_voltage()
@@ -1170,6 +1172,7 @@ def sampleAndDisplay():
 
 
   	print("Rain Total=\t%0.2f in")%(totalRain/25.4)
+  	print("Rain Last 60 Minutes=\t%0.2f in")%(rain60Minutes/25.4)
   	print("Wind Speed=\t%0.2f MPH")%(currentWindSpeed/1.6)
     	print("MPH wind_gust=\t%0.2f MPH")%(currentWindGust/1.6)
   	
@@ -1666,10 +1669,12 @@ def killLogger():
     exit()
 
 def updateRain():
+	global lastRainReading, rain60Minutes
 	addRainToArray(totalRain - lastRainReading)	
 	rain60Minutes = totalRainArray()
 	lastRainReading = totalRain
 	print "rain in past 60 minute=",rain60Minutes
+
 
 def checkForShutdown():
 	if (batteryVoltage < 3.5):
@@ -1677,11 +1682,17 @@ def checkForShutdown():
 		shutdownPi("low voltage shutdown")
 
 print  ""
-print "GroveWeatherPi Solar Powered Weather Station Version 2.91 - SwitchDoc Labs"
+print "GroveWeatherPi Solar Powered Weather Station Version 2.96 - SwitchDoc Labs"
 print ""
 print ""
 print "Program Started at:"+ time.strftime("%Y-%m-%d %H:%M:%S")
 print ""
+
+# Initialize Variables
+bmp180Temperature =  0
+bmp180Pressure = 0 
+bmp180Altitude = 0
+bmp180SeaLevel = 0 
 
 
 
@@ -1714,10 +1725,13 @@ currentWindDirection = 0
 currentWindDirectionVoltage = 0.0
 rain60Minutes = 0.0
 
-pclogging.log(pclogging.INFO, __name__, "GroveWeatherPi Startup Version 2.8")
+as3935Interrupt = False
+
+pclogging.log(pclogging.INFO, __name__, "GroveWeatherPi Startup Version 2.96")
 
 subjectText = "The GroveWeatherPi Raspberry Pi has #rebooted."
-bodyText = "GroveWeatherPi Version 2.8 Startup \n"
+ipAddress = commands.getoutput('hostname -I')
+bodyText = "GroveWeatherPi Version 2.96 Startup \n"+ipAddress+"\n"
 if (config.SunAirPlus_Present):
 	sampleSunAirPlus()
 	bodyText = bodyText + "\n" + "BV=%0.2fV/BC=%0.2fmA/SV=%0.2fV/SC=%0.2fmA" % (batteryVoltage, batteryCurrent, solarVoltage, solarCurrent)
