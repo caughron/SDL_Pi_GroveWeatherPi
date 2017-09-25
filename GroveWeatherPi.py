@@ -75,7 +75,7 @@ as3935_Interrupt_Happened = False;
 config.Lightning_Mode = True
 
 # set to true if you are building the solar powered version
-config.SolarPower_Mode = True;
+config.SolarPower_Mode = False;	#True; Changed value to false
 
 config.TCA9545_I2CMux_Present = False
 config.SunAirPlus_Present = False
@@ -101,16 +101,11 @@ import SDL_Pi_INA3221
 import SDL_DS3231
 import Adafruit_BMP.BMP280 as BMP280
 import SDL_Pi_WeatherRack as SDL_Pi_WeatherRack
-
 import SDL_Pi_FRAM
 from RPi_AS3935 import RPi_AS3935
-
 import SDL_Pi_TCA9545
-
 import Adafruit_SSD1306
-
 import Scroll_SSD1306
-
 import WeatherUnderground
 
 try:
@@ -125,9 +120,9 @@ def returnStatusLine(device, state):
 
         returnString = device
         if (state == True):
-                returnString = returnString + ":   \t\tPresent"
+                returnString = returnString + "Present"
         else:
-                returnString = returnString + ":   \t\tNot Present"
+                returnString = returnString + "Not Present"
         return returnString
 
 
@@ -493,22 +488,41 @@ if (config.TCA9545_I2CMux_Present):
 
 # Detect AM2315
 try:
-        from tentacle_pi.AM2315 import AM2315
-        try:
-		am2315 = AM2315(0x5c,"/dev/i2c-1")
-    		outsideTemperature, outsideHumidity, crc_check = am2315.sense() 
-		#print "outsideTemperature: %0.1f C" % outsideTemperature
-    		#print "outsideHumidity: %0.1f %%" % outsideHumidity
-    		#print "crc: %i" % crc_check
-                config.AM2315_Present = True
-		if (crc_check == -1):
-                	config.AM2315_Present = False
+	from tentacle_pi.AM2315 import AM2315
+        
+	#Following loop added to provide opportunity for AM2315 to be detected. Iterates 100 times before showing "Not Present" with .05ms break between.
+	try:	
+		tries = 100
+		count = 0
+		while count < tries:
+			am2315 = AM2315(0x5c,"/dev/i2c-1")
+			outsideTemperature, outsideHumidity, crc_check = am2315.sense()
+			count += 1
+			print "Attempt to connect AM2315: " + str(count)
 
-        except:
-                config.AM2315_Present = False
+			if crc_check == 1:
+				config.AM2315_Present = True
+				print "Number of attempts to connect AM2315: " + str(count)
+				print "outsideTemperature: %0.1f C" % outsideTemperature
+				print "outsideHumidity: %0.1f %%" % outsideHumidity
+				print "crc: %i" % crc_check
+				break
+			
+			elif count == tries:
+				print "**************************AM2315 did not connect***********************"
+			
+			time.sleep(.05)
+					
+	except:
+		print "**************************AM2315 did not connect***********************"
+		config.AM2315_Present = False
+		print "Did not connect."
+				
+					
+				
 except:
         config.AM2315_Present = False
-        print "------> See Readme to install tentacle_pi"
+	print "------> See Readme to install tentacle_pi"
 
 
 
@@ -550,9 +564,10 @@ def completeCommandWithValue(value):
 
 def processCommand():
 
-        f = open("//home/pi/SDL_Pi_GroveWeatherPi/state/WeatherCommand.txt", "r")
-        command = f.read()
-        f.close()
+	#f = open("//home/pi/SDL_Pi_GroveWeatherPi/state/WeatherCommand.txt", "r")
+	f = open("//home/pi/MyGroveWeatherPi/state/WeatherCommand.txt", "r")
+	command = f.read()
+	f.close()
 
 	if (command == "") or (command == "DONE"):
 		# Nothing to do
@@ -565,23 +580,23 @@ def processCommand():
 	if (command == "SAMPLEWEATHER"):
 		sampleWeather()
 		completeCommand()
-	    	writeWeatherStats()
+		writeWeatherStats()
 		return True
 
 	if (command == "SAMPLEBOTH"):
 		sampleWeather()
 		completeCommand()
-	    	writeWeatherStats()
+		writeWeatherStats()
 		sampleSunAirPlus()
-	    	writeSunAirPlusStats()
+		writeSunAirPlusStats()
 		return True
 
 	if (command == "SAMPLEBOTHGRAPHS"):
 		sampleWeather()
 		completeCommand()
-	    	writeWeatherStats()
+		writeWeatherStats()
 		sampleSunAirPlus()
-	    	writeSunAirPlusStats()
+		writeSunAirPlusStats()
 		doAllGraphs.doAllGraphs()
 		return True
 			
@@ -810,7 +825,7 @@ def writeSunAirPlusStats():
 # write weather stats out to file
 def writeWeatherStats():
 
-        f = open("/home/pi/SDL_Pi_GroveWeatherPi/state/WeatherStats.txt", "w")
+	f = open("/home/pi/SDL_Pi_GroveWeatherPi/state/WeatherStats.txt", "w")
 	f.write(str(totalRain) + '\n') 
 	f.write(str(as3935LightningCount) + '\n')
 	f.write(str(as3935LastInterrupt) + '\n')
@@ -823,13 +838,13 @@ def writeWeatherStats():
 	f.write(str(bmp180Pressure) + '\n')
 	f.write(str(bmp180Altitude) + '\n')
 	f.write(str(bmp180SeaLevel)  + '\n')
-    	f.write(str(outsideTemperature) + '\n')
+	f.write(str(outsideTemperature) + '\n')
 	f.write(str(outsideHumidity) + '\n')
 	f.write(str(currentWindDirection) + '\n')
 	f.write(str(currentWindDirectionVoltage) + '\n')
 	f.write(str(HTUtemperature) + '\n')
 	f.write(str(HTUhumidity) + '\n')
-        f.close()
+	f.close()
 
 
 
@@ -838,16 +853,13 @@ totalRain = 0
 def sampleWeather():
 
 	global as3935LightningCount
-    	global as3935, as3935LastInterrupt, as3935LastDistance, as3935LastStatus
- 	global currentWindSpeed, currentWindGust, totalRain 
-  	global 	bmp180Temperature, bmp180Pressure, bmp180Altitude,  bmp180SeaLevel 
-    	global outsideTemperature, outsideHumidity, crc_check 
+	global as3935, as3935LastInterrupt, as3935LastDistance, as3935LastStatus
+	global currentWindSpeed, currentWindGust, totalRain 
+	global bmp180Temperature, bmp180Pressure, bmp180Altitude,  bmp180SeaLevel 
+	global outsideTemperature, outsideHumidity, crc_check 
 	global currentWindDirection, currentWindDirectionVoltage
-
-        global	SunlightVisible, SunlightIR, SunlightUV,  SunlightUVIndex 
-
+	global SunlightVisible, SunlightIR, SunlightUV,  SunlightUVIndex 
 	global HTUtemperature, HTUhumidity, rain60Minutes
-
 	global block1, block2
 
         # blink GPIO LED when it's run
@@ -1001,11 +1013,16 @@ def sampleWeather():
 		# turn I2CBus 0 on
  		if (config.TCA9545_I2CMux_Present):
         		 tca9545.write_control_register(TCA9545_CONFIG_BUS0)
+				 #**********************Section added to add loop to AM2315 query*************
+		tries = 100
+		count=0
+		while count < tries:
+			outsideTemperature, outsideHumidity, crc_check = am2315.sense()
+			count += 1
+			if crc_check == 1:
+				break
 
-
-    		outsideTemperature, outsideHumidity, crc_check = am2315.sense()
-		
-	if (config.WeatherUnderground_Present == True):
+	if (config.WeatherUnderground_Present == True) and (crc_check != -1):	#Added crc_check to prevent reporting to Wunderground of erroneous info.
 
 		if (config.WXLink_Present):
 			if (config.WXLink_Data_Fresh):
@@ -1086,21 +1103,18 @@ def sampleSunAirPlus():
 def sampleAndDisplay():
         
 	global currentWindSpeed, currentWindGust, totalRain
-        global  bmp180Temperature, bmp180Pressure, bmp180Altitude,  bmp180SeaLevel
-        global outsideTemperature, outsideHumidity, crc_check
-        global currentWindDirection, currentWindDirectionVoltage
-
-        global HTUtemperature, HTUhumidity
-
-        global	SunlightVisible, SunlightIR, SunlightUV,  SunlightUVIndex 
-
+	global bmp180Temperature, bmp180Pressure, bmp180Altitude,  bmp180SeaLevel
+	global outsideTemperature, outsideHumidity, crc_check
+	global currentWindDirection, currentWindDirectionVoltage
+	global HTUtemperature, HTUhumidity
+	global SunlightVisible, SunlightIR, SunlightUV,  SunlightUVIndex 
 	global totalRain, as3935LightningCount
-    	global as3935, as3935LastInterrupt, as3935LastDistance, as3935LastStatus
+	global as3935, as3935LastInterrupt, as3935LastDistance, as3935LastStatus
 	global block1, block2
 	
 	# turn I2CBus 0 on
  	if (config.TCA9545_I2CMux_Present):
-         	 tca9545.write_control_register(TCA9545_CONFIG_BUS0)
+		tca9545.write_control_register(TCA9545_CONFIG_BUS0)
 	
 	print "----------------- "
 	if (config.WXLink_Present == False):
@@ -1171,10 +1185,10 @@ def sampleAndDisplay():
     		print "outsideHumidity: %0.1f %%" % outsideHumidity
 
 
-  	print("Rain Total=\t%0.2f in")%(totalRain/25.4)
-  	print("Rain Last 60 Minutes=\t%0.2f in")%(rain60Minutes/25.4)
-  	print("Wind Speed=\t%0.2f MPH")%(currentWindSpeed/1.6)
-    	print("MPH wind_gust=\t%0.2f MPH")%(currentWindGust/1.6)
+	print("Rain Total=\t%0.2f in")%(totalRain/25.4)
+	print("Rain Last 60 Minutes=\t%0.2f in")%(rain60Minutes/25.4)
+	print("Wind Speed=\t%0.2f MPH")%(currentWindSpeed/1.6)
+	print("MPH wind_gust=\t%0.2f MPH")%(currentWindGust/1.6)
   	
 	if (config.WXLink_Present == False):	
         	if (config.ADS1015_Present or config.ADS1115_Present):
@@ -1211,21 +1225,21 @@ def sampleAndDisplay():
 
                 print "DS3231=\t\t%s" % ds3231.read_datetime()
 
-                print "DS3231 Temperature= \t%0.2f C" % ds3231.getTemp()
+                print "DS3231 Temperature= \t%0.2f F" % (ds3231.getTemp()*9/5+32)
                 print "----------------- "
 
 
 
 	print "----------------- "
         if (config.BMP280_Present == True):
-                print " BMP280 Barometer"
+                print "BMP280 Barometer"
         else:
-                print " BMP280 Barometer Not Present"
+                print "BMP280 Barometer Not Present"
         print "----------------- "
 
 	if (config.BMP280_Present):
 		try:
-			print 'Temperature = \t{0:0.2f} C'.format(bmp280.read_temperature())
+			print 'Temperature = \t{0:0.2f} F'.format(bmp280.read_temperature()*9/5+32)
 			print 'Pressure = \t{0:0.2f} KPa'.format(bmp280.read_pressure()/1000)
 			print 'Altitude = \t{0:0.2f} m'.format(bmp280.read_altitude())
 			print 'Sealevel Pressure = \t{0:0.2f} KPa'.format(bmp280.read_sealevel_pressure(config.BMP280_Altitude_Meters)/1000)
@@ -1273,7 +1287,7 @@ def sampleAndDisplay():
 
                 HTUtemperature = hdc1080.readTemperature() 
                 HTUhumidity = hdc1080.readHumidity() 
-                print "Temperature = \t%0.2f C" % HTUtemperature
+                print "Temperature = \t%0.2f F" % (HTUtemperature*9/5+32)
                 print "Humidity = \t%0.2f %%" % HTUhumidity
                 if (config.OLED_Present):
                         Scroll_SSD1306.addLineOLED(display,  "InTemp = \t%0.2f C" % HTUtemperature)
@@ -1295,7 +1309,7 @@ def sampleAndDisplay():
 
                 HTUtemperature = float(splitstring[0])
                 HTUhumidity = float(splitstring[1])
-                print "Temperature = \t%0.2f C" % HTUtemperature
+                print "Temperature = \t%0.2f F" % (HTUtemperature*9/5+32)
                 print "Humidity = \t%0.2f %%" % HTUhumidity
                 if (config.OLED_Present):
                         Scroll_SSD1306.addLineOLED(display,  "InTemp = \t%0.2f C" % HTUtemperature)
@@ -1353,11 +1367,23 @@ def sampleAndDisplay():
         print "----------------- "
 
         if (config.AM2315_Present):
-    		outsideTemperature, outsideHumidity, crc_check = am2315.sense()
-    		print "outsideTemperature: %0.1f C" % outsideTemperature
-    		print "outsideHumidity: %0.1f %%" % outsideHumidity
-    		print "crc: %s" % crc_check
-        print "----------------- "
+		#**********************Section added to add loop to AM2315 query*************
+			tries = 100
+			count = 0
+			while count < tries:
+				outsideTemperature, outsideHumidity, crc_check = am2315.sense()
+				count += 1
+				if crc_check == 1:
+					#print "Number of attempts for good read: " + str(count)
+					break
+				#***********************Commented out below line for test *******************
+    		#outsideTemperature, outsideHumidity, crc_check = am2315.sense()
+    		
+			#Changed formula and Print Line to display F
+			print "outsideTemperature: %0.1f F" % (outsideTemperature*9/5+32)
+			print "outsideHumidity: %0.1f %%" % outsideHumidity
+			print "crc: %s" % crc_check
+        #print "----------------- "
 
 	if (config.SunAirPlus_Present):
         
@@ -1434,14 +1460,12 @@ def sampleAndDisplay():
 
 def writeWeatherRecord():
 	global as3935LightningCount
-    	global as3935, as3935LastInterrupt, as3935LastDistance, as3935LastStatus
- 	global currentWindSpeed, currentWindGust, totalRain 
-  	global 	bmp180Temperature, bmp180Pressure, bmp180Altitude,  bmp180SeaLevel 
-    	global outsideTemperature, outsideHumidity, crc_check 
+	global as3935, as3935LastInterrupt, as3935LastDistance, as3935LastStatus
+	global currentWindSpeed, currentWindGust, totalRain 
+	global bmp180Temperature, bmp180Pressure, bmp180Altitude,  bmp180SeaLevel 
+	global outsideTemperature, outsideHumidity, crc_check 
 	global currentWindDirection, currentWindDirectionVoltage
-
-        global	SunlightVisible, SunlightIR, SunlightUV,  SunlightUVIndex 
-
+	global SunlightVisible, SunlightIR, SunlightUV,  SunlightUVIndex 
 	global HTUtemperature, HTUhumidity
 
 
@@ -1697,23 +1721,23 @@ bmp180SeaLevel = 0
 
 
 print "----------------------"
-print returnStatusLine("I2C Mux - TCA9545",config.TCA9545_I2CMux_Present)
-print returnStatusLine("BMP280",config.BMP280_Present)
-print returnStatusLine("DS3231",config.DS3231_Present)
-print returnStatusLine("HDC1080",config.HDC1080_Present)
-print returnStatusLine("HTU21DF",config.HTU21DF_Present)
-print returnStatusLine("AM2315",config.AM2315_Present)
-print returnStatusLine("ADS1015",config.ADS1015_Present)
-print returnStatusLine("ADS1115",config.ADS1115_Present)
-print returnStatusLine("AS3935",config.AS3935_Present)
-print returnStatusLine("OLED",config.OLED_Present)
-print returnStatusLine("SunAirPlus",config.SunAirPlus_Present)
-print returnStatusLine("Sunlight Sensor",config.Sunlight_Present)
-print returnStatusLine("WXLink",config.WXLink_Present)
+print returnStatusLine("I2C Mux - TCA9545: \t",config.TCA9545_I2CMux_Present)
+print returnStatusLine("BMP280: \t\t",config.BMP280_Present)
+print returnStatusLine("DS3231: \t\t",config.DS3231_Present)
+print returnStatusLine("HDC1080: \t\t",config.HDC1080_Present)
+print returnStatusLine("HTU21DF: \t\t",config.HTU21DF_Present)
+print returnStatusLine("AM2315: \t\t",config.AM2315_Present)
+print returnStatusLine("ADS1015: \t\t",config.ADS1015_Present)
+print returnStatusLine("ADS1115: \t\t",config.ADS1115_Present)
+print returnStatusLine("AS3935: \t\t",config.AS3935_Present)
+print returnStatusLine("OLED: \t\t\t",config.OLED_Present)
+print returnStatusLine("SunAirPlus: \t\t",config.SunAirPlus_Present)
+print returnStatusLine("Sunlight Sensor: \t",config.Sunlight_Present)
+print returnStatusLine("WXLink: \t\t",config.WXLink_Present)
 print
-print returnStatusLine("UseMySQL",config.enable_MySQL_Logging)
-print returnStatusLine("Check WLAN",config.enable_WLAN_Detection)
-print returnStatusLine("WeatherUnderground",config.WeatherUnderground_Present)
+print returnStatusLine("UseMySQL: \t\t",config.enable_MySQL_Logging)
+print returnStatusLine("Check WLAN: \t\t",config.enable_WLAN_Detection)
+print returnStatusLine("WeatherUnderground: \t",config.WeatherUnderground_Present)
 print "----------------------"
 
 
@@ -1758,10 +1782,16 @@ scheduler.add_job(sampleAndDisplay, 'interval', seconds=10)
 scheduler.add_job(patTheDog, 'interval', seconds=10)   # reset the WatchDog Timer
 scheduler.add_job(blinkSunAirLED2X, 'interval', seconds=10, args=[2])
 
+# every 15 seconds, push data to WeatherUnderground
+
+scheduler.add_job(sampleWeather, 'interval', seconds=15)
+scheduler.add_job(sampleSunAirPlus, 'interval', seconds=15)
+scheduler.add_job(blinkSunAirLED2X, 'interval', seconds=10, args=[2])
+
 # every 5 minutes, push data to mysql and check for shutdown
 
-scheduler.add_job(sampleWeather, 'interval', seconds=5*60)
-scheduler.add_job(sampleSunAirPlus, 'interval', seconds=5*60)
+#scheduler.add_job(sampleWeather, 'interval', seconds=5*60)
+#scheduler.add_job(sampleSunAirPlus, 'interval', seconds=5*60)
 
 if (config.enable_MySQL_Logging == True):
 	scheduler.add_job(writeWeatherRecord, 'interval', seconds=5*60)
@@ -1770,10 +1800,10 @@ if (config.enable_MySQL_Logging == True):
 scheduler.add_job(updateRain, 'interval', seconds=5*60)
 scheduler.add_job(checkForShutdown, 'interval', seconds=5*60)
 
-# every 15 minutes, build new graphs
-scheduler.add_job(sampleWeather, 'interval', seconds=15*60)
-scheduler.add_job(sampleSunAirPlus, 'interval', seconds=15*60)
-scheduler.add_job(doAllGraphs.doAllGraphs, 'interval', seconds=15*60) 
+# every 10 minutes, build new graphs
+scheduler.add_job(sampleWeather, 'interval', seconds=10*60)
+scheduler.add_job(sampleSunAirPlus, 'interval', seconds=10*60)
+scheduler.add_job(doAllGraphs.doAllGraphs, 'interval', seconds=10*60) 
 
 # every 30 minutes, check wifi connections 
 scheduler.add_job(WLAN_check, 'interval', seconds=30*60)
